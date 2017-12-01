@@ -4,7 +4,7 @@
 
 # import re (not needed for now)
 import json # weather API provides JSON data
-from urllib.request import urlopen # can also not import urlopen and urllib.request.urlopen(url)
+import urllib.request # for making network connections
 import contextlib # can close url connections I open on the network more securely
 import time
 from datetime import timedelta, datetime
@@ -41,7 +41,9 @@ def temp_converter(temp, from_unit, to_unit):
 ####################################################################################################################################################################################        
 def ip_and_region(url):
     # url is the url which contains json-formatted IP information
-    with contextlib.closing(urlopen(url)) as response: #opens the URL (urlopen(url) that is given in string format
+    
+    # proper and safe closing of URL connection using contextlib
+    with contextlib.closing(urllib.request.urlopen(url)) as response: #opens the URL (urlopen(url) that is given in string format
         data = json.load(response) # the JSON document which is in the the webpage is read and stored in data as a DICTIONARY format.
     
     # should be noted above, the contextlib.closing approach ensures proper closure even in the presence of any exceptions, and is safe and good practice. from: https://stackoverflow.com/questions/1522636/should-i-call-close-after-urllib-urlopen
@@ -65,8 +67,22 @@ def ip_and_region(url):
     
 def weather(api_url, main_flag, location_list, day_flag):
     # note: location_list is a list where location_list[0] = city, location_list[1] = country
-    
-    with contextlib.closing(urlopen(api_url)) as weather_response:
+	# function returns -1 if there is an HTTPError (invalid city or country name)
+	# otherwise, function returns a list of the appropriate weather information.
+		
+    try:
+	    url_resp = urllib.request.urlopen(api_url)
+       
+    except urllib.request.HTTPError:
+	    return -1
+		
+	#finally:
+	# empty for now
+       
+    #if url_resp.getcode() == 404: # if URL does not exist, there is only one reason for that... #https://stackoverflow.com/questions/1726402/in-python-how-do-i-use-urllib-to-see-if-a-website-is-404-or-200
+#        return -1 # error return code
+
+    with contextlib.closing(url_resp) as weather_response:
         weather_data = json.load(weather_response)
         # weather_data is a dictionary with keys: "cod", "message", "cnt", "list", "city".
         # the key list's value is a list of dictionaries, with one dictionary for each date-time, differing by 3 hours
@@ -82,8 +98,6 @@ def weather(api_url, main_flag, location_list, day_flag):
     # counter = num of dt in list; that is, number of weather entries. The API used has weather information for every 3 hours, for 5 days from the current date-time.
   
     day_weather_info = []
-    
-    print("\nWEATHER INFORMATION HERE: ") 
     
     if main_flag == 0:
         for i in range(counter):
@@ -297,19 +311,37 @@ def main():
         if home_city_input == 'n': 
             print("\nPlease enter the name of the country and city name you want the weather for.")
             print("Country codes also work (and are preferred).\nTo see your country's code, see \nhttps://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#QA\n")
-            city = input("City: ") 
-            country = input("Country: ")
+            city = (input("City: ")).capitalize()
+            country = (input("Country: ")).capitalize()
+            
             location[0] = city
             location[1] = country
             
             api_url = api_url = API_url_domain + city + ',' + country + API_appid
-                       
+            
+            while weather(api_url, 1, location, -1) == -1:
+                print("\nThe city or country name/code entered are incorrect.")
+                print("Please recheck the info entered. To see country code, see \nhttps://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#QA")
+                print("\nPlease enter the name of the country and city name you want the weather for.")
+                city = (input("City: ")).capitalize()
+                country = (input("Country: ")).capitalize()
+                
+                location[0] = city
+                location[1] = country
+            
+                api_url = api_url = API_url_domain + city + ',' + country + API_appid
+            
         all_info_input = input("\nDo you want all five days' weather? (y/n): ")
     
+        i = 0
         if all_info_input == 'y':
-                day_weather_info = weather(api_url, 1, location, -1)
-                for item in day_weather_info:
-                    print(item)
+            if i == 0:
+              print("\nWEATHER INFORMATION HERE: ") 
+              i+=1
+              
+            day_weather_info = weather(api_url, 1, location, -1)
+            for item in day_weather_info:
+                print(item)
     
         else:
             #Note strftime converts a struct-time/tuple returned only by time.localtime() or gmtime(), to specified string.
@@ -329,12 +361,16 @@ def main():
   
             day_weather_info = weather(api_url, 0, location, day_flag)
             
+            i = 0
             for item in day_weather_info:
+                if i == 0:
+                  print("\nWEATHER INFORMATION HERE: ")
+                  i+=1
+                  
                 print(item)
-                
-            print("\nSimply close the GUI (tkinter) Python window to continue using the application")    
-                
+                         
             GUI(day_weather_info)
+            print("\nSimply close the GUI (tkinter) Python window to continue using the application") 
             
             continue_input = input("\nDo you want to continue using the app? (y/n): ")
             
